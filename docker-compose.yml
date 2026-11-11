@@ -1,11 +1,36 @@
 services:
   api:
     build: .
-    container_name: fastapi_health_service
+    container_name: task_manager_api
     ports:
       - "8000:8000"
     environment:
-      - APP_ENV=development
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql+psycopg://task_manager:task_manager@db:5432/task_manager}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-7}
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ./app:/app/app
     restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-task_manager}
+      POSTGRES_USER: ${POSTGRES_USER:-task_manager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
