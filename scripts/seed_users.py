@@ -3,7 +3,7 @@ import sys
 
 from sqlalchemy import select
 
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal
 from app.models import User
 from app.security import hash_password
 
@@ -46,7 +46,6 @@ def main() -> int:
                 "role": "student",
             },
         ]
-        Base.metadata.create_all(bind=engine)
         with SessionLocal.begin() as db:
             emails = [seed_user(db, **user) for user in users]
     except (ValueError, OSError) as exc:

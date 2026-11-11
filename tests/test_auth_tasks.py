@@ -17,7 +17,7 @@ from app.security import hash_password, utc_now
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client():
     test_engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -25,7 +25,6 @@ def client(monkeypatch):
     )
     TestingSessionLocal = sessionmaker(bind=test_engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(bind=test_engine)
-    monkeypatch.setattr(main_module, "engine", test_engine)
 
     def override_get_db():
         with TestingSessionLocal() as db:

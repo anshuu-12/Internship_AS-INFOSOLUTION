@@ -39,13 +39,43 @@ URL-encode special characters in the username or password. If local PostgreSQL i
 DATABASE_URL=postgresql+psycopg://postgres:YOUR_DATABASE_PASSWORD@db.YOUR_PROJECT.supabase.co:5432/postgres?sslmode=require
 ```
 
-On startup, SQLAlchemy creates missing tables. The API does not run schema migrations; back up the database before making schema changes to a deployed instance.
+## Database migrations
+
+Alembic keeps schema changes in versioned migration scripts, so the same reviewed changes can be applied consistently to development and deployment databases. The API does not create tables at startup; apply migrations before starting it.
+
+The migration environment is already initialized in this repository. For a new project, initialize it once with:
+
+```powershell
+python -m alembic init alembic
+```
+
+After changing SQLAlchemy models, create a revision from the project root:
+
+```powershell
+python -m alembic revision --autogenerate -m "describe the schema change"
+```
+
+Review the generated file in `alembic/versions/` and adjust it when needed before applying it. Then run:
+
+```powershell
+python -m alembic upgrade head
+python -m alembic current
+```
+
+To roll back the latest revision, run:
+
+```powershell
+python -m alembic downgrade -1
+```
+
+Review downgrades before running them because they can remove columns or data.
 
 ### Docker Compose
 
-The repository's Compose setup starts both the API and a PostgreSQL container with a persistent data volume. Set the database and JWT secrets in `.env`, then run:
+The repository's Compose setup starts both the API and a PostgreSQL container with a persistent data volume. Set the database and JWT secrets in `.env`, apply migrations, then start the services:
 
 ```powershell
+docker compose run --build --rm api alembic upgrade head
 docker compose up --build
 ```
 
@@ -58,6 +88,8 @@ docker compose run --rm -e TEACHER_EMAIL -e TEACHER_NAME -e TEACHER_PASSWORD -e 
 Set those six seed values in the shell before running the command. Do not commit `.env` or use real credentials in the repository.
 
 ## Seed teacher and student accounts
+
+Apply the database migrations before running the seed script; it does not create tables.
 
 Set the following environment variables in the local shell before running the seed script. Use unique email addresses and passwords of at least 8 characters. Do not put real passwords in this README, source code, or a committed file.
 

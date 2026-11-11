@@ -57,7 +57,7 @@ class Task(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
-    work_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    work_notes: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     assigned_to: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
