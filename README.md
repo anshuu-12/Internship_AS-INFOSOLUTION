@@ -123,7 +123,7 @@ Run automated tests with:
 python -m pytest
 ```
 
-Tests use an isolated in-memory SQLite database. Running the application itself requires PostgreSQL.
+Tests use pytest and FastAPI's `TestClient` to make requests against the app without starting a server. The test fixture replaces the database dependency with an isolated in-memory SQLite database, so the suite does not require PostgreSQL or real credentials. Running the application itself still requires PostgreSQL.
 
 ## Authentication and sessions
 
@@ -145,16 +145,48 @@ An unauthenticated, invalid, expired, or revoked token returns **401 Unauthorize
 | `GET /auth/me`, `GET /users/me` | Own profile | Own profile |
 | `GET /users` | View all users | 403 |
 | `POST /tasks` | Create and optionally assign to a student | 403 |
-| `GET /tasks`, `GET /tasks/{id}` | View all tasks | View only tasks assigned to them |
+| `GET /tasks` | View paginated and filterable tasks | View only their assigned tasks |
+| `GET /tasks/{id}` | View any task | View only tasks assigned to them |
 | `PATCH /tasks/{id}` | Update task fields and assign/unassign | Update only own task `status` and `work_notes` |
 | `DELETE /tasks/{id}` | Delete task | 403 |
 | `GET /tasks/progress` | View all task counts and student progress | 403 |
 
 Task statuses are `pending`, `in progress`, and `done`. Assigning a task to a nonexistent student returns 404; assigning to a teacher returns 422.
 
+## Task listing, pagination, search, and filters
+
+`GET /tasks` returns a metadata envelope rather than a bare array:
+
+```json
+{
+  "items": [],
+  "page": 1,
+  "limit": 20,
+  "total": 0
+}
+```
+
+Use `page` (1-based, default `1`) and `limit` (default `20`, maximum `100`) to paginate. Optional query parameters can be combined:
+
+- `search`: case-insensitive substring search in the task title.
+- `status`: exact status filter (`pending`, `in progress`, or `done`).
+- `assigned_to`: exact student user ID filter.
+
+For example:
+
+```text
+GET /tasks?page=1&limit=10&search=report&status=pending&assigned_to=<student-id>
+```
+
+`total` is the number of tasks matching all filters before pagination. Students continue to see only their own assigned tasks, including when using these query parameters. Invalid pagination bounds or a status outside the supported values return 422.
+
 ## Postman verification
 
-Set a collection variable `baseUrl` to `http://127.0.0.1:8000`. For each login, save `access_token` and `refresh_token` from the response; use `Authorization` → `Bearer Token` for protected requests.
+Import the collection at [`postman/Task Manager API.postman_collection.json`](./postman/Task%20Manager%20API.postman_collection.json) and the blank local environment at [`postman/Task Manager API.postman_environment.json`](./postman/Task%20Manager%20API.postman_environment.json). They contain login, task setup, pagination, search, filter, and student-isolation requests but no credentials.
+
+Start the API and seed teacher and student accounts using the instructions above. In Postman, import both files, select the local environment, and enter the seed account passwords in its secret variables. Leave the default `baseUrl` or change it to your API URL. Run the requests in collection order: the login requests save tokens in the environment, the teacher setup requests find the student and create/update a sample task, and the task query requests exercise pagination and filters. Check the test results for each request. Do not export or commit an environment with real credentials or tokens.
+
+For manual verification, set a collection variable `baseUrl` to `http://127.0.0.1:8000`. For each login, save `access_token` and `refresh_token` from the response; use `Authorization` → `Bearer Token` for protected requests.
 
 1. Log in as the seeded teacher at `POST {{baseUrl}}/auth/login`.
 2. Log in as the seeded student at `POST {{baseUrl}}/auth/login`.
@@ -170,6 +202,12 @@ Set a collection variable `baseUrl` to `http://127.0.0.1:8000`. For each login, 
    ```
 
    The request must return 401. Never expose the secret outside the local environment.
+
+## Continuous integration
+
+Continuous integration (CI) automatically runs checks when code changes are pushed, helping teams catch regressions before relying on a change. The GitHub Actions workflow in `.github/workflows/tests.yml` runs on every push, sets up Python 3.11, installs `requirements.txt`, and runs `python -m pytest -q`. It uses the same isolated SQLite test fixture and a test-only JWT secret, so it does not need production credentials or a PostgreSQL service.
+
+After pushing, open the repository's **Actions** tab, select the **Tests** workflow, and confirm the run is successful.
 
 ## Configuration
 

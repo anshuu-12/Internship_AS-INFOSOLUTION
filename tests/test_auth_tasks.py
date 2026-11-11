@@ -86,7 +86,8 @@ def test_teacher_assigns_task_student_updates_and_teacher_sees_progress(client: 
     assert created.status_code == 201
     task_id = created.json()["id"]
 
-    assert [task["id"] for task in client.get("/tasks", headers=student).json()] == [task_id]
+    listed = client.get("/tasks", headers=student).json()
+    assert [task["id"] for task in listed["items"]] == [task_id]
     updated = client.patch(
         f"/tasks/{task_id}",
         headers=student,
@@ -99,6 +100,142 @@ def test_teacher_assigns_task_student_updates_and_teacher_sees_progress(client: 
     assert progress.status_code == 200
     assert progress.json()["total"] == 1
     assert progress.json()["in_progress"] == 1
+
+
+def test_login_returns_tokens_for_teacher_and_student(client: TestClient):
+    teacher_tokens = login(client, "teacher@example.com", "teacher-pass-123")
+    student_tokens = login(client, "student@example.com", "student-pass-123")
+
+    for tokens, expected_role in (
+        (teacher_tokens, "teacher"),
+        (student_tokens, "student"),
+    ):
+        assert tokens["token_type"] == "bearer"
+        assert tokens["access_token"]
+        assert tokens["refresh_token"]
+        assert tokens["access_expires_in"] > 0
+        profile = client.get("/auth/me", headers=bearer(tokens["access_token"]))
+        assert profile.status_code == 200
+        assert profile.json()["role"] == expected_role
+
+
+def test_teacher_can_create_assign_update_and_delete_task(client: TestClient):
+    teacher = bearer(login(client, "teacher@example.com", "teacher-pass-123")["access_token"])
+    student = bearer(login(client, "student@example.com", "student-pass-123")["access_token"])
+    student_id = client.get("/auth/me", headers=student).json()["id"]
+
+    created = client.post(
+        "/tasks",
+        headers=teacher,
+        json={
+            "title": "  Initial title  ",
+            "description": "Initial description",
+            "assigned_to": student_id,
+        },
+    )
+    assert created.status_code == 201
+    task = created.json()
+    assert task["title"] == "Initial title"
+    assert task["assigned_to"] == student_id
+    assert task["created_by"] == client.get("/auth/me", headers=teacher).json()["id"]
+
+    updated = client.patch(
+        f"/tasks/{task['id']}",
+        headers=teacher,
+        json={"title": "Updated title", "status": "done"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "Updated title"
+    assert updated.json()["status"] == "done"
+
+    deleted = client.delete(f"/tasks/{task['id']}", headers=teacher)
+    assert deleted.status_code == 204
+    assert client.get(f"/tasks/{task['id']}", headers=teacher).status_code == 404
+
+
+def test_task_listing_paginates_searches_and_filters(client: TestClient):
+    teacher = bearer(login(client, "teacher@example.com", "teacher-pass-123")["access_token"])
+    students = {
+        user["email"]: user["id"]
+        for user in client.get("/users", headers=teacher).json()
+        if user["role"] == "student"
+    }
+    student_id = students["student@example.com"]
+    other_student_id = students["other@example.com"]
+
+    task_ids = []
+    for payload in (
+        {"title": "Alpha report", "assigned_to": student_id, "status": "pending"},
+        {"title": "Beta report", "assigned_to": student_id, "status": "in progress"},
+        {"title": "Gamma notes", "assigned_to": other_student_id, "status": "pending"},
+        {"title": "Delta report", "status": "done"},
+    ):
+        created = client.post(
+            "/tasks",
+            headers=teacher,
+            json={"title": payload["title"], "assigned_to": payload.get("assigned_to")},
+        )
+        assert created.status_code == 201
+        task_ids.append(created.json()["id"])
+        if payload["status"] != "pending":
+            updated = client.patch(
+                f"/tasks/{created.json()['id']}",
+                headers=teacher,
+                json={"status": payload["status"]},
+            )
+            assert updated.status_code == 200
+
+    first_page = client.get("/tasks?page=1&limit=2", headers=teacher).json()
+    second_page = client.get("/tasks?page=2&limit=2", headers=teacher).json()
+    assert first_page["page"] == 1
+    assert first_page["limit"] == 2
+    assert first_page["total"] == 4
+    assert len(first_page["items"]) == 2
+    assert second_page["page"] == 2
+    assert second_page["total"] == 4
+    assert len(second_page["items"]) == 2
+    assert {task["id"] for task in first_page["items"]}.isdisjoint(
+        task["id"] for task in second_page["items"]
+    )
+
+    searched = client.get("/tasks?search=REPORT", headers=teacher).json()
+    assert searched["total"] == 3
+    assert {task["title"] for task in searched["items"]} == {
+        "Alpha report",
+        "Beta report",
+        "Delta report",
+    }
+
+    by_status = client.get("/tasks?status=pending", headers=teacher).json()
+    assert by_status["total"] == 2
+    assert {task["title"] for task in by_status["items"]} == {"Alpha report", "Gamma notes"}
+
+    by_assignee = client.get(f"/tasks?assigned_to={student_id}", headers=teacher).json()
+    assert by_assignee["total"] == 2
+    assert {task["id"] for task in by_assignee["items"]} == set(task_ids[:2])
+
+    combined = client.get(
+        f"/tasks?search=report&status=pending&assigned_to={student_id}",
+        headers=teacher,
+    ).json()
+    assert combined["total"] == 1
+    assert combined["items"][0]["id"] == task_ids[0]
+
+    student = bearer(login(client, "student@example.com", "student-pass-123")["access_token"])
+    own_tasks = client.get("/tasks", headers=student).json()
+    assert own_tasks["page"] == 1
+    assert own_tasks["limit"] == 20
+    assert own_tasks["total"] == 2
+    assert {task["id"] for task in own_tasks["items"]} == set(task_ids[:2])
+    hidden_tasks = client.get(f"/tasks?assigned_to={other_student_id}", headers=student).json()
+    assert hidden_tasks["total"] == 0
+    assert hidden_tasks["items"] == []
+
+
+@pytest.mark.parametrize("query", ["page=0", "limit=0", "limit=101", "status=archived"])
+def test_task_listing_rejects_invalid_query_parameters(client: TestClient, query: str):
+    teacher = bearer(login(client, "teacher@example.com", "teacher-pass-123")["access_token"])
+    assert client.get(f"/tasks?{query}", headers=teacher).status_code == 422
 
 
 def test_role_permissions_and_isolation(client: TestClient):

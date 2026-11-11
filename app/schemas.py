@@ -107,6 +107,13 @@ class TaskRead(BaseSchema):
     updated_at: datetime
 
 
+class TaskPage(BaseSchema):
+    items: list[TaskRead]
+    page: int
+    limit: int
+    total: int
+
+
 class StudentProgress(BaseSchema):
     student_id: str
     student_name: str

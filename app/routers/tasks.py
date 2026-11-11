@@ -1,9 +1,17 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 
 from app.dependencies import CurrentUser, DbSession, TeacherUser
 from app.models import Task, User
-from app.schemas import StudentProgress, TaskCreate, TaskProgress, TaskRead, TaskUpdate
+from app.schemas import (
+    StudentProgress,
+    TaskCreate,
+    TaskPage,
+    TaskProgress,
+    TaskRead,
+    TaskStatus,
+    TaskUpdate,
+)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 STATUSES = ("pending", "in progress", "done")
@@ -76,12 +84,40 @@ def task_progress(db: DbSession, _: TeacherUser) -> TaskProgress:
     )
 
 
-@router.get("", response_model=list[TaskRead])
-def list_tasks(db: DbSession, user: CurrentUser) -> list[Task]:
-    query = select(Task).order_by(Task.created_at.desc())
+@router.get("", response_model=TaskPage)
+def list_tasks(
+    db: DbSession,
+    user: CurrentUser,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    search: str | None = Query(default=None, max_length=200),
+    status_filter: TaskStatus | None = Query(default=None, alias="status"),
+    assigned_to: str | None = None,
+) -> TaskPage:
+    filters = []
     if user.role == "student":
-        query = query.where(Task.assigned_to == user.id)
-    return list(db.scalars(query).all())
+        filters.append(Task.assigned_to == user.id)
+    if search is not None and search.strip():
+        filters.append(Task.title.icontains(search.strip(), autoescape=True))
+    if status_filter is not None:
+        filters.append(Task.status == status_filter)
+    if assigned_to is not None:
+        filters.append(Task.assigned_to == assigned_to)
+
+    total = db.scalar(select(func.count(Task.id)).where(*filters)) or 0
+    query = (
+        select(Task)
+        .where(*filters)
+        .order_by(Task.created_at.desc(), Task.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    return TaskPage(
+        items=list(db.scalars(query).all()),
+        page=page,
+        limit=limit,
+        total=total,
+    )
 
 
 @router.get("/{task_id}", response_model=TaskRead)
