@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: task-manager-api
+    runtime: docker
+    plan: free
+    branch: feat/alembic-migrations
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_MINUTES
+        value: "15"
+      - key: REFRESH_TOKEN_DAYS
+        value: "7"

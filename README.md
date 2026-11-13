@@ -217,3 +217,29 @@ After pushing, open the repository's **Actions** tab, select the **Tests** workf
 | `JWT_SECRET` | Yes | — | Private signing secret, at least 32 characters |
 | `ACCESS_TOKEN_MINUTES` | No | `15` | Access token lifetime in minutes |
 | `REFRESH_TOKEN_DAYS` | No | `7` | Refresh session lifetime in days |
+
+## Deploy on Render with Supabase
+
+Deployment packages the API and runs it on a hosted service. The Render Blueprint in [`render.yaml`](./render.yaml) builds the Docker image from the `feat/alembic-migrations` branch, starts the web service, and checks `GET /health`. The container listens on Render's assigned `PORT`; locally it falls back to port `8000`. Render can pause a free service when idle, so its first request may need time to wake up.
+
+Environment variables configure a running service without putting environment-specific values in source code. Render injects `DATABASE_URL`, `JWT_SECRET`, and token-lifetime settings when the container starts; keep database credentials and signing secrets in Render's environment settings, never in Git. Alembic migrations are a separate step: they apply the versioned schema changes to the hosted PostgreSQL database before the API uses it. The API intentionally does not create tables at startup.
+
+1. Create a Supabase PostgreSQL project and copy its session-mode connection string from the project dashboard (the session pooler is suitable for long-lived app connections and migrations). Convert it to SQLAlchemy's Psycopg 3 form (`postgresql+psycopg://...`) and include `sslmode=require` when Supabase specifies it. URL-encode special characters in the username or password.
+2. In Render, create a Blueprint from this repository and select the `feat/alembic-migrations` branch. Set `DATABASE_URL` to the Supabase connection string in the service's environment settings. Render generates `JWT_SECRET`; keep `ACCESS_TOKEN_MINUTES` and `REFRESH_TOKEN_DAYS` at their defaults or set them in Render. Never commit actual credentials or secrets.
+3. Before the API uses the database, install the project requirements locally and set `DATABASE_URL` in a local environment that is not committed (for example, the ignored `.env`). From the project root, run:
+
+   ```powershell
+   python -m alembic upgrade head
+   python -m alembic current
+   ```
+
+4. Create the initial teacher and student after migrations. Set `TEACHER_EMAIL`, `TEACHER_NAME`, `TEACHER_PASSWORD`, `STUDENT_EMAIL`, `STUDENT_NAME`, and `STUDENT_PASSWORD` in the local PowerShell session, then run:
+
+   ```powershell
+   python -m scripts.seed_users
+   ```
+
+   Use unique emails and private passwords of at least 8 characters. The script refuses to overwrite an existing account. Do not commit the seed values or add them to the web service's runtime environment.
+5. After Render reports the deploy is healthy, open the service's `/docs` and `/health` paths and follow the Postman verification steps above using the deployed base URL. A free service may sleep when idle; allow its first request time to wake up.
+
+The deployed API URL will be added here after the live service is created and verified.
