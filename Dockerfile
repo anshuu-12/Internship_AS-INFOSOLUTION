@@ -18,5 +18,5 @@ COPY . .
 # Expose FastAPI default port
 EXPOSE 8000
 
-# Run the API via Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the API on Render's assigned port, with a local-development fallback.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

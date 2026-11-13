@@ -1,0 +1,564 @@
+{
+  "info": {
+    "_postman_id": "62c22871-2e5e-405a-8d75-119bceac2a44",
+    "name": "Task Manager API",
+    "description": "Authentication and task listing examples. Import the accompanying environment and set local account credentials before running; no credentials are included.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "sampleTitle",
+      "value": "Postman pagination demo",
+      "type": "string"
+    },
+    {
+      "key": "searchTitle",
+      "value": "Postman",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login as teacher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{teacherEmail}}\",\n  \"password\": \"{{teacherPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher login succeeds', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) { pm.environment.set('teacherAccessToken', pm.response.json().access_token); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as student",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student login succeeds', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) { pm.environment.set('studentAccessToken', pm.response.json().access_token); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Teacher setup",
+      "item": [
+        {
+          "name": "Find student ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher can list users', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  const student = pm.response.json().find(function (user) { return user.email === pm.environment.get('studentEmail'); });",
+                  "  pm.test('Configured student exists', function () { pm.expect(student).to.exist; });",
+                  "  if (student) { pm.environment.set('studentId', student.id); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create sample task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{sampleTitle}}\",\n  \"description\": \"Created by the Postman collection\",\n  \"assigned_to\": \"{{studentId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher creates an assigned task', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) { pm.environment.set('taskId', pm.response.json().id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark sample task done",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"done\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Teacher updates task status', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) { pm.test('Task status is done', function () { pm.expect(pm.response.json().status).to.eql('done'); }); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Task pagination and filters",
+      "item": [
+        {
+          "name": "List page 1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Paginated list returns 200', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.test('Response includes items and pagination metadata', function () { pm.expect(data).to.have.property('items').that.is.an('array'); pm.expect(data.page).to.eql(1); pm.expect(data.limit).to.eql(10); pm.expect(data.total).to.be.a('number'); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search title",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks?search={{searchTitle}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "{{searchTitle}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Title search returns 200', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) { pm.test('Every result matches the title search', function () { pm.response.json().items.forEach(function (task) { pm.expect(task.title.toLowerCase()).to.include(pm.collectionVariables.get('searchTitle').toLowerCase()); }); }); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks?status=done",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "done"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status filter returns 200', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) { pm.test('Every result has done status', function () { pm.response.json().items.forEach(function (task) { pm.expect(task.status).to.eql('done'); }); }); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by assigned student",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks?assigned_to={{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "assigned_to",
+                  "value": "{{studentId}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Assigned-user filter returns 200', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) { pm.test('Every result is assigned to the selected student', function () { pm.response.json().items.forEach(function (task) { pm.expect(task.assigned_to).to.eql(pm.environment.get('studentId')); }); }); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Combine search and filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks?search={{searchTitle}}&status=done&assigned_to={{studentId}}&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "{{searchTitle}}"
+                },
+                {
+                  "key": "status",
+                  "value": "done"
+                },
+                {
+                  "key": "assigned_to",
+                  "value": "{{studentId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{teacherAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Combined filters return 200', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Every result matches all filters', function () {",
+                  "    pm.response.json().items.forEach(function (task) {",
+                  "      pm.expect(task.title.toLowerCase()).to.include(pm.collectionVariables.get('searchTitle').toLowerCase());",
+                  "      pm.expect(task.status).to.eql('done');",
+                  "      pm.expect(task.assigned_to).to.eql(pm.environment.get('studentId'));",
+                  "    });",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Student sees only assigned tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student task list returns 200', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) { pm.test('Every listed task belongs to the student', function () { pm.response.json().items.forEach(function (task) { pm.expect(task.assigned_to).to.eql(pm.environment.get('studentId')); }); }); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
