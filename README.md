@@ -220,7 +220,7 @@ After pushing, open the repository's **Actions** tab, select the **Tests** workf
 
 ## Deploy on Render with Supabase
 
-Deployment packages the API and runs it on a hosted service. The Render Blueprint in [`render.yaml`](./render.yaml) builds the Docker image from the `feat/alembic-migrations` branch, starts the web service, and checks `GET /health`. The container listens on Render's assigned `PORT`; locally it falls back to port `8000`. Render can pause a free service when idle, so its first request may need time to wake up.
+Deployment packages the API and runs it on a hosted service. The Render Blueprint in [`render.yaml`](./render.yaml) builds the Docker image from the `feat/alembic-migrations` branch, starts the web service with `APP_ENV=production`, and checks `GET /health`. The container listens on Render's assigned `PORT`; locally it falls back to port `8000`. Render can pause a free service when idle, so its first request may need time to wake up.
 
 Environment variables configure a running service without putting environment-specific values in source code. Render injects `DATABASE_URL`, `JWT_SECRET`, and token-lifetime settings when the container starts; keep database credentials and signing secrets in Render's environment settings, never in Git. Alembic migrations are a separate step: they apply the versioned schema changes to the hosted PostgreSQL database before the API uses it. The API intentionally does not create tables at startup.
 
@@ -242,4 +242,4 @@ Environment variables configure a running service without putting environment-sp
    Use unique emails and private passwords of at least 8 characters. The script refuses to overwrite an existing account. Do not commit the seed values or add them to the web service's runtime environment.
 5. After Render reports the deploy is healthy, open the service's `/docs` and `/health` paths and follow the Postman verification steps above using the deployed base URL. A free service may sleep when idle; allow its first request time to wake up.
 
-The deployed API URL will be added here after the live service is created and verified.
+The Render service is available at [https://internship-as-infosolution.onrender.com](https://internship-as-infosolution.onrender.com), with interactive docs at [/docs](https://internship-as-infosolution.onrender.com/docs) and health at [/health](https://internship-as-infosolution.onrender.com/health). Health and docs are verified. Database-backed routes still require a configured Supabase `DATABASE_URL` and applied migrations.
